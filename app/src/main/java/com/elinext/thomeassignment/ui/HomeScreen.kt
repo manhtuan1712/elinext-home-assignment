@@ -1,18 +1,23 @@
 package com.elinext.thomeassignment.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -39,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -91,7 +97,9 @@ fun HomeScreen(
     val screenHeight = configuration.screenHeightDp.dp
     val screenWidth = configuration.screenWidthDp.dp
 
-    val gridState = rememberLazyGridState()
+    val itemsPerPage = 70
+    val totalPages = (gridItems.size + itemsPerPage - 1) / itemsPerPage
+    val pagerState = rememberPagerState(pageCount = { totalPages })
     val coroutineScope = rememberCoroutineScope()
 
     Column(
@@ -114,7 +122,8 @@ fun HomeScreen(
                             imageUrl = "https://picsum.photos/200/200"
                         )
                         coroutineScope.launch {
-                            gridState.animateScrollToItem(gridItems.size - 1)
+                            val lastPage = (gridItems.size - 1) / 70
+                            pagerState.animateScrollToPage(lastPage)
                         }
                     }
                 ) {
@@ -146,7 +155,7 @@ fun HomeScreen(
                                     }
                                 )
 
-                                gridState.animateScrollToItem(0)
+                                pagerState.animateScrollToPage(0)
                                 isReloading = false
                             } catch (e: Exception) {
                                 errorState = "Failed to reload: ${e.message}"
@@ -256,24 +265,69 @@ fun HomeScreen(
             }
 
             else -> {
-                LazyHorizontalGrid(
-                    rows = GridCells.Fixed(10),
-                    state = gridState,
-                    contentPadding = PaddingValues(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(
-                        items = gridItems,
-                        key = { it.id }
-                    ) { item ->
-                        GridItemCard(
-                            item = item,
-                            screenWidth = screenWidth,
-                            screenHeight = screenHeight,
-                            reloadSession = reloadSession
-                        )
+                Column(modifier = Modifier.fillMaxSize()) {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .weight(1f)
+                    ) { page ->
+                        val startIndex = page * itemsPerPage
+                        val endIndex = minOf(startIndex + itemsPerPage, gridItems.size)
+                        val pageItems = gridItems.subList(startIndex, endIndex)
+                        
+                        val availableWidth = screenWidth - 20.dp
+                        val availableHeight = screenHeight - 160.dp
+                        val itemWidth = availableWidth / 7
+                        val itemHeight = availableHeight / 10
+                        
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(7),
+                            contentPadding = PaddingValues(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            modifier = Modifier.fillMaxSize(),
+                            userScrollEnabled = false
+                        ) {
+                            items(
+                                items = pageItems,
+                                key = { it.id }
+                            ) { item ->
+                                GridItemCard(
+                                    item = item,
+                                    itemWidth = itemWidth,
+                                    itemHeight = itemHeight,
+                                    reloadSession = reloadSession
+                                )
+                            }
+                        }
+                    }
+                    if (totalPages > 1) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            repeat(totalPages) { index ->
+                                val isSelected = pagerState.currentPage == index
+                                Box(
+                                    modifier = Modifier
+                                        .size(if (isSelected) 10.dp else 8.dp)
+                                        .clip(RoundedCornerShape(50))
+                                        .background(
+                                            if (isSelected)
+                                                MaterialTheme.colorScheme.primary
+                                            else
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                        )
+                                )
+                                if (index < totalPages - 1) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -284,15 +338,11 @@ fun HomeScreen(
 @Composable
 fun GridItemCard(
     item: GridItem,
-    screenWidth: androidx.compose.ui.unit.Dp,
-    screenHeight: androidx.compose.ui.unit.Dp,
+    itemWidth: androidx.compose.ui.unit.Dp,
+    itemHeight: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier,
     reloadSession: Int = 0,
 ) {
-    val availableWidth = screenWidth - 20.dp
-    val itemWidth = availableWidth / 7
-    val availableHeight = screenHeight - 90.dp
-    val itemHeight = availableHeight / 10
     Card(
         modifier = modifier
             .width(itemWidth)
